@@ -2,10 +2,8 @@
 import json
 import re
 import shutil
-from email.mime import base
 from pathlib import Path
 
-from pip._internal.network import session
 
 # Matching keywords in the converted file name to BIDS structure
 SERIES_MAP = [
@@ -98,9 +96,44 @@ def nii_to_bids(nii_folder, bids_folder, subject, session=None):
             parts.append(ses)
 
         # Making task labels alphanumeric for sorting
-        parts.append(f"task-{clean(entities['task'])}"
+        parts.append(f"task-{clean(entities['task'])}")
 
-        #
+        # If the original name has a run number, zero padding to two digits if needed. No entity with no run number.
+        run = find_run(stem)
+        if run is None:
+            parts.append(f"run-{run:02d}")
+
+        parts.append(suffix)
+
+        # join the parts with underscores
+        out_name = "_".join(parts) + ext
+
+        # Make the datatype folder if needed
+        out_dir = base_dir / datatype
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / out_name
+
+        # edit JSON sidecars, add a "TaskName" for functional BOLD data and keeps original naming with underscores
+        if ext == ".json":
+            sidecar = json.loads(path.read_text())
+            sidecar.setdefault("TaskName", entities["task"])
+            out_path.write_text(json.dumps(sidecar, indent=2))
+        else: # all the other file types are copied as normal. copy2 preserves timestamps, and the originals are left untouched
+            shutil.copy2(path, out_dir)
+
+    # After the loop, print out remaining files that were skipped
+    if unmatched:
+        print("Skipped files because there was no matching keyword in SERIES_MAP:")
+        for name in unmatched:
+            print(f'{name}')
+
+
+
+
+
+
+
+
 
 
 
